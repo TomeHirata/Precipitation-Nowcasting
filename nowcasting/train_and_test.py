@@ -3,6 +3,7 @@ sys.path.insert(0, '../')
 import torch
 from nowcasting.hko.dataloader import HKOIterator
 from nowcasting.config import cfg
+from nowcasting.helpers.gifmaker import save_gif
 import numpy as np
 from nowcasting.hko.evaluation import HKOEvaluation
 from tqdm import tqdm
@@ -11,8 +12,96 @@ import os.path as osp
 import os
 import shutil
 import copy
+from nowcasting.movingmnist_iterator import MovingMNISTAdvancedIterator
 
+def train_mnist(encoder_forecaster, optimizer, criterion, lr_scheduler, batch_size, max_iterations, test_iteration_interval, test_and_save_checkpoint_iterations, folder_name, base_dir, probToPixel=None):
+    IN_LEN = cfg.MODEL.IN_LEN
+    OUT_LEN = cfg.MODEL.OUT_LEN
+    evaluater = HKOEvaluation(seq_len=OUT_LEN, use_central=False)
+    train_loss = 0.0
+    save_dir = osp.join(base_dir, folder_name)
+    if not os.path.exists(save_dir):
+        os.mkdir(save_dir)
+    model_save_dir = osp.join(save_dir, 'models')
+    log_dir = osp.join(save_dir, 'logs')
+    all_scalars_file_name = osp.join(save_dir, "all_scalars.json")
+    # pkl_save_dir = osp.join(save_dir, 'pkl')
+    if osp.exists(all_scalars_file_name):
+        os.remove(all_scalars_file_name)
+    if osp.exists(log_dir):
+        shutil.rmtree(log_dir)
+    if osp.exists(model_save_dir):
+        shutil.rmtree(model_save_dir)
+    os.mkdir(model_save_dir)
 
+    writer = SummaryWriter(log_dir)
+    mnist_iter = MovingMNISTAdvancedIterator(
+        distractor_num=cfg.MOVINGMNIST.DISTRACTOR_NUM,
+        initial_velocity_range=(cfg.MOVINGMNIST.VELOCITY_LOWER,
+                                cfg.MOVINGMNIST.VELOCITY_UPPER),
+        rotation_angle_range=(cfg.MOVINGMNIST.ROTATION_LOWER,
+                              cfg.MOVINGMNIST.ROTATION_UPPER),
+        scale_variation_range=(cfg.MOVINGMNIST.SCALE_VARIATION_LOWER,
+                               cfg.MOVINGMNIST.SCALE_VARIATION_UPPER),
+        illumination_factor_range=(cfg.MOVINGMNIST.ILLUMINATION_LOWER,
+                                   cfg.MOVINGMNIST.ILLUMINATION_UPPER))
+    
+    itera = 0
+    while itera < max_iterations:
+        frame_dat, _ = mnist_iter.sample(batch_size=cfg.MODEL.TRAIN.BATCH_SIZE,
+                                         seqlen=cfg.MOVINGMNIST.IN_LEN + cfg.MOVINGMNIST.OUT_LEN)
+        train_data = torch.from_numpy(np.array(frame_dat[0:cfg.MOVINGMNIST.IN_LEN, ...])).to(cfg.GLOBAL.DEVICE) / 255.0
+        train_label = torch.from_numpy(
+            frame_dat[cfg.MODEL.IN_LEN:(cfg.MOVINGMNIST.IN_LEN + cfg.MOVINGMNIST.OUT_LEN), ...]).to(cfg.GLOBAL.DEVICE) / 255.0
+        encoder_forecaster.train()
+        optimizer.zero_grad()
+        output = encoder_forecaster(train_data)
+        mask = torch.from_numpy(np.ones(train_label.size()).astype(int)).to(cfg.GLOBAL.DEVICE)
+        loss = criterion(output, train_label, mask)
+        loss.backward()
+        torch.nn.utils.clip_grad_value_(encoder_forecaster.parameters(), clip_value=50.0)
+        optimizer.step()
+        lr_scheduler.step()
+        train_loss += loss.item()
+        train_label_numpy = train_label.cpu().numpy()
+        if probToPixel is None:
+            output_numpy = np.clip(output.detach().cpu().numpy(), 0.0, 1.0)
+        else:
+            # if classification, output: S*B*C*H*W
+            output_numpy = probToPixel(output.detach().cpu().numpy(), train_label, mask,
+                                                            lr_scheduler.get_lr()[0])
+
+        evaluater.update(train_label_numpy, output_numpy, mask.cpu().numpy())
+
+        if (itera + 1) % test_iteration_interval == 0:
+            with torch.no_grad():
+                encoder_forecaster.eval()
+                overall_mse = 0
+                for iter_id in range(10):
+                    valid_frame, _ = mnist_iter.sample(batch_size=cfg.MODEL.TRAIN.BATCH_SIZE,
+                                            seqlen=cfg.MOVINGMNIST.IN_LEN + cfg.MOVINGMNIST.OUT_LEN,
+                                            random=False)
+                    valid_data = torch.from_numpy(np.array(valid_frame[0:cfg.MOVINGMNIST.IN_LEN, ...])).to(cfg.GLOBAL.DEVICE) / 255.0
+                    valid_label = torch.from_numpy(
+                        valid_frame[cfg.MODEL.IN_LEN:(cfg.MOVINGMNIST.IN_LEN + cfg.MOVINGMNIST.OUT_LEN), ...]).to(cfg.GLOBAL.DEVICE) / 255.0
+                    output = encoder_forecaster(valid_data)
+                    overall_mse += torch.mean((valid_label - output)**2)
+            avg_mse = overall_mse / 10
+            with open(os.path.join(base_dir, 'result.txt'), 'a') as f:
+                f.write(str(avg_mse))
+            print(base_dir, avg_mse)
+            gif_dir = os.path.join(base_dir, "gif")
+            if not os.path.exists(gif_dir):
+                os.mkdir(gif_dir)
+            save_gif(output.detach().cpu().numpy()[:, 0, 0, :, :], os.path.join(gif_dir, "pred-{}.gif".format(itera)))
+            save_gif(train_data.detach().cpu().numpy()[:, 0, 0, :, :], os.path.join(gif_dir, "in-{}.gif".format(itera)))
+            save_gif(train_label.detach().cpu().numpy()[:, 0, 0, :, :], os.path.join(gif_dir, "gt-{}.gif".format(itera)))
+        
+        if (itera + 1) % test_and_save_checkpoint_iterations == 0:
+            torch.save(encoder_forecaster.state_dict(), osp.join(model_save_dir, 'encoder_forecaster_{}.pth'.format(itera)))
+        itera += 1
+
+    writer.close()
 
 def train_and_test(encoder_forecaster, optimizer, criterion, lr_scheduler, batch_size, max_iterations, test_iteration_interval, test_and_save_checkpoint_iterations, folder_name, probToPixel=None):
     # HKO-7 evaluater and dataloader
@@ -54,7 +143,6 @@ def train_and_test(encoder_forecaster, optimizer, criterion, lr_scheduler, batch
         train_batch = torch.from_numpy(train_batch.astype(np.float32)).to(cfg.GLOBAL.DEVICE) / 255.0
         train_data = train_batch[:IN_LEN, ...]
         train_label = train_batch[IN_LEN:IN_LEN + OUT_LEN, ...]
-        mask = torch.from_numpy(train_mask[IN_LEN:IN_LEN + OUT_LEN, ...].astype(int)).to(cfg.GLOBAL.DEVICE)
 
         encoder_forecaster.train()
         optimizer.zero_grad()

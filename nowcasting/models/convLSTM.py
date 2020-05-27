@@ -22,7 +22,7 @@ class ConvLSTM(nn.Module):
 
     # inputs and states should not be all none
     # inputs: S*B*C*H*W
-    def forward(self, inputs=None, states=None, seq_len=cfg.HKO.BENCHMARK.IN_LEN):
+    def forward(self, inputs=None, states=None, seq_len=cfg.MODEL.IN_LEN):
 
         if states is None:
             c = torch.zeros((inputs.size(1), self._num_filter, self._state_height,

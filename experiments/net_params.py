@@ -3,7 +3,6 @@ sys.path.insert(0, '..')
 from nowcasting.hko.dataloader import HKOIterator
 from nowcasting.config import cfg
 import torch
-from nowcasting.config import cfg
 from nowcasting.models.forecaster import Forecaster
 from nowcasting.models.encoder import Encoder
 from collections import OrderedDict
@@ -126,3 +125,37 @@ convlstm_forecaster_params = [
                  kernel_size=3, stride=1, padding=1),
     ]
 ]
+# rnn_block_num = len(cfg.RNN_BLOCKS.NUM_FILTER)
+# build model
+def convlstm_encoder_params_mnist():
+    return [
+        [
+            OrderedDict({
+                layer[0]: [layer[1], layer[2], layer[3], layer[4], layer[5]]
+                for layer in sub
+            })
+            for sub in cfg.MODEL.ENCODER.DOWNSAMPLE
+        ],
+    # in_channels=v[0], out_channels=v[1],kernel_size=v[2], stride=v[3],padding=v[4]
+        [
+            ConvLSTM(input_channel=layer[1], num_filter=layer[2], b_h_w=(batch_size, layer[3], layer[4]),
+                    kernel_size=layer[5], stride=layer[6], padding=layer[7])
+            for layer in cfg.MODEL.ENCODER.RNN_BLOCKS.LAYERS
+        ]
+    ]
+
+def convlstm_forecaster_params_mnist():
+    return [
+        [
+            OrderedDict({
+                layer[0]: [layer[1], layer[2], layer[3], layer[4], layer[5]]
+                for layer in sub
+            })
+            for sub in cfg.MODEL.FORECASTER.UPSAMPLE
+        ],
+        [
+            ConvLSTM(input_channel=layer[1], num_filter=layer[2], b_h_w=(batch_size, layer[3], layer[4]),
+                    kernel_size=layer[5], stride=layer[6], padding=layer[7])
+            for layer in cfg.MODEL.FORECASTER.RNN_BLOCKS.LAYERS
+        ]
+    ]
