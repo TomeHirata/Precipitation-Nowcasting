@@ -88,7 +88,7 @@ def train_mnist(encoder_forecaster, optimizer, criterion, lr_scheduler, batch_si
                     overall_mse += torch.mean((valid_label - output)**2)
             avg_mse = overall_mse / 10
             with open(os.path.join(base_dir, 'result.txt'), 'a') as f:
-                f.write(str(avg_mse))
+                f.write(str(avg_mse)+'\n')
             print(base_dir, avg_mse)
             gif_dir = os.path.join(base_dir, "gif")
             if not os.path.exists(gif_dir):

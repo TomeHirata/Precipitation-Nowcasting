@@ -100,6 +100,7 @@ __C.MOVINGMNIST.IMG_SIZE = 64
 __C.MOVINGMNIST.TEST_FILE = os.path.join(__C.MNIST_PATH, "movingmnist_10000_nodistr.npz")
 
 __C.MODEL = edict()
+__C.MODEL.TYPE = 'TrajGRU'
 __C.MODEL.RESUME = False  # If True, load LOAD_ITER parameters from LOAD_DIR
 __C.MODEL.TESTING = False # If True, run in Testing mode
 __C.MODEL.LOAD_DIR = "" # The directory to load the pre-trained parameters
@@ -168,6 +169,9 @@ __C.MODEL.ENCODER.RNN_BLOCKS.LAYERS = [
     ['ConvLSTM', 64, 96, 32, 32, 3, 1, 1],
     ['ConvLSTM', 96, 96, 16, 16, 3, 1, 1]
 ]
+__C.MODEL.ENCODER.RNN_BLOCKS.NUM_INPUT = [1, 64, 96]
+__C.MODEL.ENCODER.RNN_BLOCKS.HW = None
+__C.MODEL.ENCODER.RNN_BLOCKS.I2H_STRIDE = None
 
 __C.MODEL.FORECASTER = edict()
 __C.MODEL.FORECASTER.HAS_MASK = True
@@ -203,6 +207,9 @@ __C.MODEL.FORECASTER.RNN_BLOCKS.I2H_PAD = [(1, 1), (1, 1), (1, 1)]
 # These features are only used in TrajGRU
 __C.MODEL.FORECASTER.RNN_BLOCKS.L = [5, 5, 5]
 __C.MODEL.FORECASTER.RNN_BLOCKS.LAYERS = [['ConvLSTM', 96, 96, 16, 16, 3, 1, 1],['ConvLSTM', 96, 96, 32, 32, 3, 1, 1],['ConvLSTM', 64, 64, 64, 64, 3, 1, 1]]
+__C.MODEL.FORECASTER.RNN_BLOCKS.NUM_INPUT = [96, 96, 64]
+__C.MODEL.FORECASTER.RNN_BLOCKS.HW = None
+__C.MODEL.FORECASTER.RNN_BLOCKS.I2H_STRIDE = None
 
 __C.MODEL.DECONVBASELINE = edict()
 __C.MODEL.DECONVBASELINE.BASE_NUM_FILTER = 16
@@ -245,8 +252,6 @@ __C.MODEL.TEST.ONLINE.BETA1 = 0.5     # Used in ADAM!
 __C.MODEL.TEST.ONLINE.EPS = 1E-6
 __C.MODEL.TEST.ONLINE.GRAD_CLIP = 50.0
 __C.MODEL.TEST.ONLINE.WD = 0
-# from nowcasting.models.model import activation
-# __C.MODEL.RNN_ACT_TYPE = activation('leaky', negative_slope=0.2, inplace=True)
 
 def _merge_two_config(user_cfg, default_cfg):
     """ Merge user's config into default config dictionary, clobbering the

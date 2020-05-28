@@ -14,6 +14,7 @@ from nowcasting.train_and_test import train_and_test
 import numpy as np
 from nowcasting.hko.evaluation import *
 from nowcasting.models.convLSTM import ConvLSTM
+from nowcasting.models.model import activation
 
 batch_size = cfg.GLOBAL.BATCH_SZIE
 
@@ -157,5 +158,45 @@ def convlstm_forecaster_params_mnist():
             ConvLSTM(input_channel=layer[1], num_filter=layer[2], b_h_w=(batch_size, layer[3], layer[4]),
                     kernel_size=layer[5], stride=layer[6], padding=layer[7])
             for layer in cfg.MODEL.FORECASTER.RNN_BLOCKS.LAYERS
+        ]
+    ]
+
+def encoder_params_mnist():
+    return [
+        [
+            OrderedDict({
+                layer[0]: [layer[1], layer[2], layer[3], layer[4], layer[5]]
+                for layer in sub
+            })
+            for sub in cfg.MODEL.ENCODER.DOWNSAMPLE
+        ],
+
+        [
+            TrajGRU(input_channel=cfg.MODEL.ENCODER.RNN_BLOCKS.NUM_INPUT[i], num_filter=cfg.MODEL.ENCODER.RNN_BLOCKS.NUM_FILTER[i],
+                b_h_w=(batch_size, cfg.MODEL.ENCODER.RNN_BLOCKS.HW[i][0], cfg.MODEL.ENCODER.RNN_BLOCKS.HW[i][1]), zoneout=0.0, L=cfg.MODEL.ENCODER.RNN_BLOCKS.L[i],
+                i2h_kernel=cfg.MODEL.ENCODER.RNN_BLOCKS.I2H_KERNEL[i], i2h_stride=cfg.MODEL.ENCODER.RNN_BLOCKS.I2H_STRIDE[i], i2h_pad=cfg.MODEL.ENCODER.RNN_BLOCKS.I2H_PAD[i],
+                h2h_kernel=cfg.MODEL.ENCODER.RNN_BLOCKS.H2H_KERNEL[i], h2h_dilate=cfg.MODEL.ENCODER.RNN_BLOCKS.H2H_DILATE[i],
+                act_type=activation(cfg.MODEL.RNN_ACT_TYPE, negative_slope=0.2, inplace=True))
+            for i in range(len(cfg.MODEL.ENCODER.RNN_BLOCKS.NUM_FILTER))
+        ]
+    ]
+
+def forecaster_params_mnist():
+    return [
+        [
+            OrderedDict({
+                layer[0]: [layer[1], layer[2], layer[3], layer[4], layer[5]]
+                for layer in sub
+            })
+            for sub in cfg.MODEL.FORECASTER.UPSAMPLE
+        ],
+        [
+            TrajGRU(input_channel=cfg.MODEL.FORECASTER.RNN_BLOCKS.NUM_INPUT[i], num_filter=cfg.MODEL.FORECASTER.RNN_BLOCKS.NUM_FILTER[i],
+                b_h_w=(batch_size, cfg.MODEL.FORECASTER.RNN_BLOCKS.HW[i][0], cfg.MODEL.FORECASTER.RNN_BLOCKS.HW[i][1]),
+                zoneout=0.0, L=cfg.MODEL.FORECASTER.RNN_BLOCKS.L[i],
+                i2h_kernel=cfg.MODEL.FORECASTER.RNN_BLOCKS.I2H_KERNEL[i], i2h_stride=cfg.MODEL.FORECASTER.RNN_BLOCKS.I2H_STRIDE[i], i2h_pad=cfg.MODEL.FORECASTER.RNN_BLOCKS.I2H_PAD[i],
+                h2h_kernel=cfg.MODEL.FORECASTER.RNN_BLOCKS.H2H_KERNEL[i], h2h_dilate=cfg.MODEL.FORECASTER.RNN_BLOCKS.H2H_DILATE[i],
+                act_type=activation(cfg.MODEL.RNN_ACT_TYPE, negative_slope=0.2, inplace=True))
+            for i in range(len(cfg.MODEL.FORECASTER.RNN_BLOCKS.NUM_FILTER))
         ]
     ]

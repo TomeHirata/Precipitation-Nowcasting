@@ -16,7 +16,7 @@ from nowcasting.models.model import EF
 from torch.optim import lr_scheduler
 from nowcasting.models.loss import Weighted_mse_mae
 from nowcasting.train_and_test import train_mnist
-from experiments.net_params import convlstm_encoder_params_mnist, convlstm_forecaster_params_mnist
+from experiments.net_params import convlstm_encoder_params_mnist, convlstm_forecaster_params_mnist, encoder_params_mnist, forecaster_params_mnist
 
 random.seed(123)
 mx.random.seed(9302)
@@ -70,18 +70,25 @@ def train(args):
     save_movingmnist_cfg(base_dir)
 
     batch_size = cfg.GLOBAL.BATCH_SZIE
-    max_iterations = 100000
-    test_iteration_interval = 1000
-    test_and_save_checkpoint_iterations = 1000
+    max_iterations = 200000
+    test_iteration_interval = 2000
+    test_and_save_checkpoint_iterations = 2000
     LR_step_size = 20000
     gamma = 0.7
 
     LR = 1e-4
 
     criterion = Weighted_mse_mae().to(cfg.GLOBAL.DEVICE)
-    encoder_subnet, encoder_net = convlstm_encoder_params_mnist()
+    if cfg.MODEL.TYPE == 'TrajGRU':
+        encoder_subnet, encoder_net = encoder_params_mnist()
+        forecaster_subnet, forecaster_net = forecaster_params_mnist()
+    elif cfg.MODEL.TYPE == 'ConvLSTM':
+        encoder_subnet, encoder_net = convlstm_encoder_params_mnist()
+        forecaster_subnet, forecaster_net = convlstm_forecaster_params_mnist()
+    else:
+        raise NotImplementedError('Model is not found.')
+
     encoder = Encoder(encoder_subnet, encoder_net).to(cfg.GLOBAL.DEVICE)
-    forecaster_subnet, forecaster_net = convlstm_forecaster_params_mnist()
     forecaster = Forecaster(forecaster_subnet, forecaster_net).to(cfg.GLOBAL.DEVICE)
 
     encoder_forecaster = EF(encoder, forecaster).to(cfg.GLOBAL.DEVICE)
