@@ -69,14 +69,14 @@ def train(args):
     # logging_config(folder=base_dir, name="training")
     save_movingmnist_cfg(base_dir)
 
-    batch_size = cfg.GLOBAL.BATCH_SZIE
-    max_iterations = 200000
-    test_iteration_interval = 2000
-    test_and_save_checkpoint_iterations = 2000
-    LR_step_size = 20000
-    gamma = 0.7
+    batch_size = cfg.MODEL.TRAIN.BATCH_SIZE
+    max_iterations = cfg.MODEL.TRAIN.MAX_ITER
+    test_iteration_interval = cfg.MODEL.VALID_ITER
+    test_and_save_checkpoint_iterations = cfg.MODEL.SAVE_ITER
+    LR_step_size = cfg.MODEL.TRAIN.LR_STEP
+    gamma = cfg.MODEL.TRAIN.GAMMA1
 
-    LR = 1e-4
+    LR = cfg.MODEL.TRAIN.LR
 
     criterion = Weighted_mse_mae().to(cfg.GLOBAL.DEVICE)
     if cfg.MODEL.TYPE == 'TrajGRU':
