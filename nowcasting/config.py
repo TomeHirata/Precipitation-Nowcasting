@@ -5,11 +5,38 @@ import torch
 from collections import OrderedDict
 import yaml
 import logging
+import subprocess
+import json
+
+DEFAULT_ATTRIBUTES = (
+    'index',
+    'uuid',
+    'name',
+    'timestamp',
+    'memory.total',
+    'memory.free',
+    'memory.used',
+    'utilization.gpu',
+    'utilization.memory'
+)
+
+def get_gpu_info(nvidia_smi_path='nvidia-smi', keys=DEFAULT_ATTRIBUTES, no_units=True):
+    nu_opt = '' if not no_units else ',nounits'
+    cmd = '%s --query-gpu=%s --format=csv,noheader%s' % (nvidia_smi_path, ','.join(keys), nu_opt)
+    output = subprocess.check_output(cmd, shell=True)
+    lines = output.decode().split('\n')
+    lines = [ line.strip() for line in lines if line.strip() != '' ]
+
+    return [ { k: v for k, v in zip(keys, line.split(', ')) } for line in lines ]
 
 __C = edict()
 cfg = __C
 __C.GLOBAL = edict()
 __C.GLOBAL.DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if __C.GLOBAL.DEVICE.type == 'cuda':
+    gpu_info = get_gpu_info()
+    memory_use = np.array(list(map(int, [info['utilization.gpu'] for info in gpu_info])))
+    __C.GLOBAL.DEVICE = torch.device("cuda:%i" % (memory_use.argmin()) if torch.cuda.is_available() else "cpu")
 __C.GLOBAL.BATCH_SZIE = 2
 # for dirs in ['/home/hzzone/save', '/Users/hzzone/Downloads']:
 #     if os.path.exists(dirs):
